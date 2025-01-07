@@ -9,9 +9,12 @@
 // BMP280 setup
 Adafruit_BMP280 bmp;
 const int pumpPin = 26;
-double setpoint = 800.0;
+double setpoint = 759.0;
+double atm = 925.0;
+double error;
 
-double input, output;
+double input;
+double output = 0;
 double kp = 8, ki = 0.5, kd = 1.0;
 PID myPID(&input, &output, &setpoint, kp, ki, kd, REVERSE);
 
@@ -31,6 +34,9 @@ TFT_eSPI tft = TFT_eSPI();
 #define LED_RED 17
 #define LED_GREEN 16
 #define buzzer 5
+#define buzzer2 18
+
+//#define pumpPin 26
 
 // Touchscreen pins
 #define XPT2046_IRQ 36
@@ -50,6 +56,8 @@ bool lockState = false;
 bool isBuzzing = false;
 unsigned long previousMillis = 0;
 const long interval = 500;
+
+//bool buzzerState = false;
 
 SPIClass touchscreenSPI = SPIClass(VSPI);
 XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
@@ -99,11 +107,11 @@ Button minusBtn = {50, ROW_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "-"};
 Button plusBtn = {50 + BUTTON_WIDTH + BUTTON_SPACING, ROW_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "+"};
 Button timerMinusBtn = {50 + 2 * (BUTTON_WIDTH + BUTTON_SPACING), ROW_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "-"};
 Button timerPlusBtn = {50 + 3 * (BUTTON_WIDTH + BUTTON_SPACING), ROW_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "+"};
-Button startBtn = {50 + 4 * (BUTTON_WIDTH + BUTTON_SPACING), ROW_Y, BUTTON_WIDTH * 1.5, BUTTON_HEIGHT, "Start"};
+//Button startBtn = {50 + 4 * (BUTTON_WIDTH + BUTTON_SPACING), ROW_Y, BUTTON_WIDTH * 1.5, BUTTON_HEIGHT, "Start"};
 
 // Scaling factors
-#define X_SCALING 1.05
-#define Y_SCALING 0.65
+#define X_SCALING 1
+#define Y_SCALING 0.7
 #define X_OFFSET 25
 #define Y_OFFSET 3
 
@@ -144,7 +152,7 @@ void drawInterface() {
     drawButton(plusBtn, BUTTON_COLOR);
     drawButton(timerMinusBtn, BUTTON_COLOR);
     drawButton(timerPlusBtn, BUTTON_COLOR);
-    drawButton(startBtn, timerRunning ? TFT_RED : TFT_GREEN);
+    //drawButton(startBtn, timerRunning ? TFT_RED : TFT_GREEN);
 }
 
 void updateTimerDisplay() {
@@ -164,7 +172,19 @@ void updateTimerDisplay() {
                 greenState = false;
                 pumpState = false;
                 digitalWrite(LED_RED, LOW);
-                tone(buzzer, 2000, 2000);
+                analogWrite(pumpPin, 0);
+                //tone(buzzer, 2000, 2000);
+                tone(buzzer, 4186, 300);
+                //delay(300);
+                tone(buzzer, 4434.92, 300);
+                //delay(300);
+                tone(buzzer, 4698.63, 300);
+                //delay(300);
+                tone(buzzer, 4978, 300);
+                //delay(300);
+                tone(buzzer, 5274, 300);
+                //delay(300);
+                noTone(buzzer);
             }
             tft.fillRoundRect(SCREEN_WIDTH/2 - 150, SCREEN_HEIGHT/2 - 30, 300, 60, 10, TFT_WHITE);
             tft.drawRoundRect(SCREEN_WIDTH/2 - 150, SCREEN_HEIGHT/2 - 30, 300, 60, 10, TFT_RED);
@@ -186,7 +206,19 @@ void updateTimerDisplay() {
                 greenState = false;
                 pumpState = false;
                 digitalWrite(LED_RED, LOW);
-                tone(buzzer, 2000, 2000);
+                analogWrite(pumpPin, 0);
+                //tone(buzzer, 2000, 2000);
+                tone(buzzer, 4186, 300);
+                //delay(300);
+                tone(buzzer, 4434.92, 300);
+                //delay(300);
+                tone(buzzer, 4698.63, 300);
+                //delay(300);
+                tone(buzzer, 4978, 300);
+                //delay(300);
+                tone(buzzer, 5274, 300);
+                //delay(300);
+                noTone(buzzer);
             }
         } else {
             String timeText = String(timerValue) + " sec";
@@ -254,7 +286,7 @@ void startTimer() {
         startTime = millis();
         timerDuration = timerValue * 1000;
         Serial.println("Timer started");
-        drawButton(startBtn, TFT_RED);
+        //drawButton(startBtn, TFT_RED);
     }
 }
 
@@ -263,10 +295,11 @@ void stopTimer() {
         timerRunning = false;
         digitalWrite(LED_GREEN, LOW);
         Serial.println("Timer stopped");
-        drawButton(startBtn, TFT_GREEN);
+        //drawButton(startBtn, TFT_GREEN);
     }
 }
 
+//ini hapus aja soalnya ga dipake
 void control_buzzer(int rt_pressure){
   int threshold = rt_pressure - targetPressure;
   if(threshold > 10){
@@ -314,7 +347,9 @@ void setup() {
     pinMode(LED_RED, OUTPUT);
     pinMode(LED_GREEN, OUTPUT);
     pinMode(buzzer, OUTPUT);
-    
+    pinMode(buzzer2, OUTPUT);
+
+    //digitalWrite(buzzer2, LOW);
     // Initialize touchscreen
     touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
     touchscreen.begin(touchscreenSPI);
@@ -338,6 +373,13 @@ void setup() {
     myPID.SetMode(AUTOMATIC);
     myPID.SetOutputLimits(minOutput, 255);
     myPID.SetSampleTime(100);
+
+    ledcAttach(pumpPin, pwmFreq, pwmResolution);
+
+    pumpState = false;
+    output = 0;
+    analogWrite(pumpPin, 0);
+
 }
 
 void loop() {
@@ -349,16 +391,52 @@ void loop() {
 
     // Print pressure value to Serial Monitor in mmHg
     Serial.print("Pressure = ");
-    Serial.print(pressure_mmHg, 2); // Print pressure in mmHg
-    Serial.println(" mmHg");
+    Serial.print(input); // Print pressure in mmHg
+    Serial.print(" hPa");
+    Serial.print("  PWM: ");
+    Serial.print(output); 
+    Serial.print("\t");
+    Serial.print("error: ");
+    Serial.print(error); 
+    Serial.println(" hPa");
 
-    // Activate buzzer safety system ONLY if treatment has started (pump is on)
-    //int rt_pressure = 0;
+    setpoint = atm - (targetPressure * 1.33);
+    
 
     if (pumpState) {
         int rt_pressure = pressure_mmHg; // Use the converted pressure value
-        control_buzzer(rt_pressure);
+        //unsigned long currentMillis = millis();
+        //int interval;
+        //control_buzzer(rt_pressure);
+        error = input - setpoint;
+        if (error > 10) {
+          output = minOutput + (kp * error);
+        if(error > 70 && interval > 5000){
+          digitalWrite(buzzer2, HIGH);
+          digitalWrite(LED_RED, HIGH);
+          delay(300);
+          digitalWrite(buzzer2, LOW);
+          delay(300);
+        }
+          //buzzerState = true;
+            if (output > 255) output = 255;
+    }   else {
+           myPID.Compute();
+           digitalWrite(buzzer2, LOW);
+           digitalWrite(LED_RED, LOW);
+      }
+
+      analogWrite(pumpPin, output);
     } 
+    else{
+      analogWrite(pumpPin, 0);
+      }
+
+    //setpoint = targetPressure * 1.33;
+
+
+    // Activate buzzer safety system ONLY if treatment has started (pump is on)
+    //int rt_pressure = 0;
 
     // Update pressure display on TFT with the TARGET pressure (setpoint)
     tft.fillRect(180, 80, 200, 40, BACKGROUND);
@@ -368,16 +446,18 @@ void loop() {
     tft.drawString(pressureText, 180, 80, 1);
 
     // Rest of the PID and pump control logic (still uses hPa for calculations)
-    double error = input - setpoint;
+    /*double error = input - setpoint;
     if (error > 10) {
         output = minOutput + (kp * error);
         if (output > 255) output = 255;
     } else {
         myPID.Compute();
-    }
+    }*/
 
     // Use analogWrite instead of ledcWrite
-    analogWrite(pumpPin, output);
+    //analogWrite(pumpPin, output);
+
+    
 
     // Handle physical buttons
     currentState_1 = digitalRead(BUTTON_1);
@@ -389,20 +469,25 @@ void loop() {
             greenState = true;
             //control_buzzer(rt_pressure);
             startTimer();
+            //ledcWrite(pumpPin, output);
         } else  {
             digitalWrite(LED_GREEN, LOW);
-            //digitalWrite(LED_RED, LOW);
+            digitalWrite(LED_RED, LOW);
             //noTone(buzzer);
             pumpState = false;
             greenState = false;
+            output = 0;
+            analogWrite(pumpPin, 0);
             stopTimer();
         }
       
         Serial.print("Pump state: ");
         Serial.print(pumpState); 
         Serial.println("\t");
+
     }
     lastState_1 = currentState_1;
+
 
     currentState_2 = digitalRead(BUTTON_2);
     if (lastState_2 == HIGH && currentState_2 == LOW) {
@@ -456,13 +541,13 @@ void loop() {
                 if (timerValue < 3600) timerValue += 5;
                 updateTimerDisplay();
             }
-            else if (isButtonPressed(startBtn, touchX, touchY)) {
-                if (!timerRunning) {
-                    startTimer();
-                } else {
-                    stopTimer();
-                }
-            }
+            //else if (isButtonPressed(startBtn, touchX, touchY)) {
+                //if (!timerRunning) {
+                    //startTimer();
+                //} else {
+                    //stopTimer();
+                //}
+            //}
             delay(200);
         }
     }
@@ -475,5 +560,5 @@ void loop() {
         }
     }
 
-    delay(100);
+    //delay(100);
 }
